@@ -1,0 +1,64 @@
+---
+# STUD1: S1-SW2 - Catalyst 2960 (Switch0)   Kjør:  ansible-playbook sw2.yml
+- name: Konfigurer S1-SW2
+  hosts: SW2
+  gather_facts: false
+  vars:
+    vlans:
+      - { id: 10, name: VLAN10 }
+      - { id: 20, name: VLAN20 }
+    allowed_vlans: "10,20"
+    trunk_ports: "FastEthernet0/3"   # Fa0/3 = SW1
+    access_ports:
+      - { ports: "FastEthernet0/1", vlan: 10 }   # VLAN10_1
+      - { ports: "FastEthernet0/2", vlan: 20 }   # VLAN20_2
+    # EtherChannel mot den andre studentens SW2 - MÅ avtales med den andre studenten
+    ec_ports: "FastEthernet0/4 - 5"
+    ec_group: 1
+    ec_mode: active                    # LACP. Andre side: active eller passive
+
+  tasks:
+    - name: VLAN-er
+      cisco.ios.ios_config:
+        parents: "vlan {{ item.id }}"
+        lines:
+          - "name {{ item.name }}"
+      loop: "{{ vlans }}"
+
+    - name: Trunker
+      cisco.ios.ios_config:
+        parents: "interface range {{ trunk_ports }}"
+        lines:
+          - switchport mode trunk
+          - "switchport trunk allowed vlan {{ allowed_vlans }}"
+          - no shutdown
+
+    - name: PC-porter (access)
+      cisco.ios.ios_config:
+        parents: "interface range {{ item.ports }}"
+        lines:
+          - switchport mode access
+          - "switchport access vlan {{ item.vlan }}"
+          - spanning-tree portfast
+          - no shutdown
+      loop: "{{ access_ports }}"
+
+    - name: EtherChannel - medlemsporter
+      cisco.ios.ios_config:
+        parents: "interface range {{ ec_ports }}"
+        lines:
+          - switchport mode trunk
+          - "switchport trunk allowed vlan {{ allowed_vlans }}"
+          - "channel-group {{ ec_group }} mode {{ ec_mode }}"
+          - no shutdown
+
+    - name: EtherChannel - Port-channel som trunk
+      cisco.ios.ios_config:
+        parents: "interface Port-channel{{ ec_group }}"
+        lines:
+          - switchport mode trunk
+          - "switchport trunk allowed vlan {{ allowed_vlans }}"
+
+    - name: Lagre config
+      cisco.ios.ios_config:
+        save_when: modified

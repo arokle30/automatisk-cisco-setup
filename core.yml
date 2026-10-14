@@ -1,0 +1,40 @@
+---
+# STUD1: S1-CORE (Catalyst 3650)   Kjør:  ansible-playbook core.yml
+- name: Konfigurer S1-CORE
+  hosts: CORE
+  gather_facts: false
+  vars:
+    routed_ports:
+      - { port: GigabitEthernet1/0/3, ip: 172.16.5.1, desc: MGMT_STUD1 }
+      - { port: GigabitEthernet1/0/1, ip: 172.16.3.1, desc: Link til R1 }
+      - { port: GigabitEthernet1/0/2, ip: 172.16.4.1, desc: Link til R2 }
+    ospf_lines:
+      - router-id 3.3.3.3
+      - network 172.16.5.0 0.0.0.255 area 0
+      - network 172.16.3.0 0.0.0.255 area 0
+      - network 172.16.4.0 0.0.0.255 area 0
+
+  tasks:
+    - name: ip routing
+      cisco.ios.ios_config:
+        lines:
+          - ip routing
+
+    - name: Routed porter (MGMT, R1, R2)
+      cisco.ios.ios_config:
+        parents: "interface {{ item.port }}"
+        lines:
+          - "description {{ item.desc }}"
+          - no switchport
+          - "ip address {{ item.ip }} 255.255.255.0"
+          - no shutdown
+      loop: "{{ routed_ports }}"
+
+    - name: OSPF
+      cisco.ios.ios_config:
+        parents: router ospf 1
+        lines: "{{ ospf_lines }}"
+
+    - name: Lagre config
+      cisco.ios.ios_config:
+        save_when: modified

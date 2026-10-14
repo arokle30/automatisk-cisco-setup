@@ -1,0 +1,45 @@
+---
+# Sjekk at alt virker:  ansible-playbook verify.yml
+- name: CORE og rutere
+  hosts: CORE,R1,R2
+  gather_facts: false
+  tasks:
+    - name: Ruting
+      cisco.ios.ios_command:
+        commands:
+          - show ip interface brief
+          - show ip ospf neighbor
+          - show ip route ospf
+      register: out
+    - name: Vis
+      ansible.builtin.debug:
+        var: out.stdout_lines
+
+- name: HSRP og DHCP
+  hosts: R1,R2
+  gather_facts: false
+  tasks:
+    - name: HSRP og DHCP
+      cisco.ios.ios_command:
+        commands:
+          - show standby brief
+          - show ip dhcp binding
+      register: out
+    - name: Vis
+      ansible.builtin.debug:
+        var: out.stdout_lines
+
+- name: Switcher
+  hosts: SW1,SW2
+  gather_facts: false
+  tasks:
+    - name: VLAN, trunker og EtherChannel
+      cisco.ios.ios_command:
+        commands:
+          - show vlan brief
+          - show interfaces trunk
+          - show etherchannel summary
+      register: out
+    - name: Vis
+      ansible.builtin.debug:
+        var: out.stdout_lines

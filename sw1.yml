@@ -1,0 +1,31 @@
+---
+# STUD1: S1-SW1 - Catalyst 2960 (Switch3)   Kjør:  ansible-playbook sw1.yml
+- name: Konfigurer S1-SW1
+  hosts: SW1
+  gather_facts: false
+  vars:
+    vlans:
+      - { id: 10, name: VLAN10 }
+      - { id: 20, name: VLAN20 }
+    allowed_vlans: "10,20"
+    trunk_ports: "FastEthernet0/2 - 4"   # Fa0/2 = SW2, Fa0/3 = R1, Fa0/4 = R2
+
+  tasks:
+    - name: VLAN-er
+      cisco.ios.ios_config:
+        parents: "vlan {{ item.id }}"
+        lines:
+          - "name {{ item.name }}"
+      loop: "{{ vlans }}"
+
+    - name: Trunker
+      cisco.ios.ios_config:
+        parents: "interface range {{ trunk_ports }}"
+        lines:
+          - switchport mode trunk
+          - "switchport trunk allowed vlan {{ allowed_vlans }}"
+          - no shutdown
+
+    - name: Lagre config
+      cisco.ios.ios_config:
+        save_when: modified

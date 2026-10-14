@@ -1,0 +1,69 @@
+---
+# STUD1: S1-R2 (ISR 4321)   Kjør:  ansible-playbook r2.yml
+# Gateway for VLAN20. HSRP-gruppe 20 deles med den andre studenten - denne ruteren er aktiv (110).
+- name: Konfigurer S1-R2
+  hosts: R2
+  gather_facts: false
+  vars:
+    core_port: GigabitEthernet0/0/1        # mot CORE
+    core_ip: 172.16.4.2
+    lan_port: GigabitEthernet0/0/0          # trunk mot SW1 Fa0/4
+    vlan: 20
+    lan_ip: 192.168.20.3
+    hsrp_ip: 192.168.20.1                     # felles gateway for begge studentene
+    hsrp_priority: 110
+    dhcp_excluded:                     # delt område så DHCP ikke krasjer med den andre studenten
+      - 192.168.20.1 192.168.20.10
+      - 192.168.20.128 192.168.20.254
+    ospf_lines:
+      - router-id 2.2.2.2
+      - network 172.16.4.0 0.0.0.255 area 0
+      - network 192.168.20.0 0.0.0.255 area 0
+
+  tasks:
+    - name: Link mot CORE
+      cisco.ios.ios_config:
+        parents: "interface {{ core_port }}"
+        lines:
+          - "ip address {{ core_ip }} 255.255.255.0"
+          - no shutdown
+
+    - name: LAN-porten opp (trunk mot SW1)
+      cisco.ios.ios_config:
+        parents: "interface {{ lan_port }}"
+        lines:
+          - no ip address
+          - no shutdown
+
+    - name: Subinterface for VLAN20 med HSRP
+      cisco.ios.ios_config:
+        parents: "interface {{ lan_port }}.{{ vlan }}"
+        lines:
+          - "encapsulation dot1Q {{ vlan }}"
+          - "ip address {{ lan_ip }} 255.255.255.0"
+          - "standby {{ vlan }} ip {{ hsrp_ip }}"
+          - "standby {{ vlan }} priority {{ hsrp_priority }}"
+          - "standby {{ vlan }} preempt"
+
+    - name: DHCP - ekskluderte adresser
+      cisco.ios.ios_config:
+        lines:
+          - "ip dhcp excluded-address {{ item }}"
+      loop: "{{ dhcp_excluded }}"
+
+    - name: DHCP-pool VLAN20
+      cisco.ios.ios_config:
+        parents: "ip dhcp pool VLAN{{ vlan }}"
+        lines:
+          - "network 192.168.20.0 255.255.255.0"
+          - "default-router {{ hsrp_ip }}"
+          - dns-server 8.8.8.8
+
+    - name: OSPF
+      cisco.ios.ios_config:
+        parents: router ospf 1
+        lines: "{{ ospf_lines }}"
+
+    - name: Lagre config
+      cisco.ios.ios_config:
+        save_when: modified
